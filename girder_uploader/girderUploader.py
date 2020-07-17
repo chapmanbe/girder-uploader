@@ -36,6 +36,8 @@ class GirderUploader:
         self._request_metadata = False
         self._client.add_folder_upload_callback(self.__upload_folder_callback)
         self._client.add_item_upload_callback(self.__upload_item_callback)
+        self._ontology_names = set()
+        self._no_upload = False
 
     def upload_folder_with_metadata(self, girder_dest_path, local_path, metadata):
         """Upload folder to girder with associated metadata.
@@ -90,6 +92,18 @@ class GirderUploader:
             parentId, parentType = self.__get_parent_id_and_type()
             self.__upload(self._local_path, parentId, parentType)
 
+    def get_ontology(self):
+        """Creates search widgets without any upload process
+
+        Doesn't upload any files or folders
+        """
+        self._no_upload = True;
+        self._bio_search.display_widgets()
+
+    def get_names(self):
+        """Returns the names from the results"""
+        return self._ontology_names
+
     def request_metadata(self, topic, ontologies, require=False):
         """Create field to request metadata from the user.
 
@@ -118,8 +132,6 @@ class GirderUploader:
             self._client.upload(local_path, parent_id, parent_type=parent_type)
 
     def __submit_callback(self, results):
-        parentId, parentType = self.__get_parent_id_and_type()
-
         def get_id(id_url):
             temp_id = id_url.rsplit('/',  1)[-1]
             if '#' in temp_id:
@@ -130,7 +142,8 @@ class GirderUploader:
                 # DOID, UBERON
                 return temp_id.rsplit('_', 1)[-1]
 
-        def extract_info(topic):
+        self._ontology_names = set()
+        def extract_info(self, topic):
             keyword_dict = results[topic]
             for keyword in keyword_dict:
                 dictionary = keyword_dict[keyword]
@@ -138,6 +151,7 @@ class GirderUploader:
                 json_result = self._bio_search.GET(ontology_url)
                 acronym = json_result['acronym']
                 name = json_result['name']
+                self._ontology_names.add(keyword)
                 resource = dictionary['@id']
                 id = get_id(resource)
 
@@ -148,9 +162,14 @@ class GirderUploader:
                         'Resource URL': resource}
                 self._metadata[topic].append(meta)
 
+        
         for topic in results:
             self._metadata[topic] = []
-            extract_info(topic)
+            extract_info(self, topic)
+
+        if self._no_upload:
+            return
+        parentId, parentType = self.__get_parent_id_and_type()
 
         self.__upload(self._local_path, parentId, parentType)
 
